@@ -4,81 +4,81 @@
 #include <ThreeWire.h>
 
 // ----------------------- Configuration -----------------------
-const char* ssid = "solar_track";
-const char* password = "admin70503";
+const char *ssid = "solar_track";
+const char *password = "admin70503";
 
 const int RELAY_EAST = 12;
 const int RELAY_WEST = 14;
 const int SENSOR_EAST = 22;
 const int SENSOR_WEST = 23;
 
-
 bool autoMode = true;
 int morningStartHour = 7;
 int nightReturnHour = 18;
 int stepInterval = 30;
-int motorStepTime = 1000;  // متغير يمكن تحديثه أثناء التشغيل
+int motorStepTime = 1000; // متغير يمكن تحديثه أثناء التشغيل
 
 bool isMovingEast = false;
 bool isMovingWest = false;
 
+unsigned long lastMoveTime = 0; // Stores last movement time
+bool returningToEast = false;   // Track if we returned to East
 
-unsigned long lastMoveTime = 0;  // Stores last movement time
-bool returningToEast = false;    // Track if we returned to East
-
-
-ThreeWire myWire(15, 2, 4);  
+ThreeWire myWire(15, 2, 4); //  DAT = GPIO15, CLK= GPIO2, RST = GPIO4
 RtcDS1302<ThreeWire> Rtc(myWire);
 WebServer server(80);
 
 // ----------------------- WiFi Access Point Setup -----------------------
-void setupWiFi() {
+void setupWiFi()
+{
     WiFi.softAP(ssid, password);
     Serial.print("Access Point IP Address: ");
     Serial.println(WiFi.softAPIP());
 }
 
 // ----------------------- Motor Control Functions -----------------------
-void moveEast() {
-    if (digitalRead(SENSOR_EAST) == HIGH) {
+void moveEast()
+{
+    if (digitalRead(SENSOR_EAST) == HIGH)
+    {
         Serial.println("East limit reached");
         return;
     }
-    if (isMovingWest) {
+    if (isMovingWest)
+    {
         Serial.println("Cannot move East while West is active!");
         return;
     }
-    
+
     Serial.println("Moving East");
     digitalWrite(RELAY_EAST, HIGH);
-    digitalWrite(RELAY_WEST, LOW);  // تأكد من إيقاف الاتجاه الآخر
+    digitalWrite(RELAY_WEST, LOW); // تأكد من إيقاف الاتجاه الآخر
     isMovingEast = true;
     isMovingWest = false;
 }
 
-
-
-void moveWest() {
-    if (digitalRead(SENSOR_WEST) == HIGH) {
+void moveWest()
+{
+    if (digitalRead(SENSOR_WEST) == HIGH)
+    {
         Serial.println("West limit reached");
         return;
     }
-    if (isMovingEast) {
+    if (isMovingEast)
+    {
         Serial.println("Cannot move West while East is active!");
         return;
     }
-    
+
     Serial.println("Moving West");
     digitalWrite(RELAY_WEST, HIGH);
-    digitalWrite(RELAY_EAST, LOW);  // تأكد من إيقاف الاتجاه الآخر
+    digitalWrite(RELAY_EAST, LOW); // تأكد من إيقاف الاتجاه الآخر
     isMovingWest = true;
     isMovingEast = false;
 }
 
-
-
-
-void stopMotor() {
+void stopMotor()
+{
     digitalWrite(RELAY_EAST, LOW);
     digitalWrite(RELAY_WEST, LOW);
     isMovingEast = false;
@@ -86,14 +86,13 @@ void stopMotor() {
     Serial.println("Motor stopped.");
 }
 
-
-
 // ----------------------- Web Server Handlers -----------------------
-void handleRoot() {
+void handleRoot()
+{
     RtcDateTime now = Rtc.GetDateTime();
     char timeBuffer[20];
     sprintf(timeBuffer, "%02d:%02d:%02d", now.Hour(), now.Minute(), now.Second());
-    
+
     String html = "<!DOCTYPE html><html><head><title>Solar Controller</title>"
                   "<meta name='viewport' content='width=device-width, initial-scale=1'>"
                   "<style>"
@@ -114,55 +113,66 @@ void handleRoot() {
                   "</style></head><body>"
                   "<div class='container'>"
                   "<h1>Solar Panel Controller</h1>"
-                  "<p><strong>Current Time:</strong> " + String(timeBuffer) + "</p>"
-                  "<a href='/move?dir=east' class='btn east'>Move East</a>"
-                  "<a href='/move?dir=west' class='btn west'>Move West</a>"
-                  "<a href='/move?dir=stop' class='btn stop'>Stop</a>"
-                  "<div class='settings-box'>"
-                  "<h2>Settings</h2>"
-                  "<form action='/settings' method='POST'>"
-                  "<label>Auto Mode: <input type='checkbox' name='autoMode' " + (autoMode ? "checked" : "") + "></label>"
-                  "<label>Morning Start Hour: <input type='number' name='morningStart' value='" + String(morningStartHour) + "'></label>"
-                  "<label>Night Return Hour: <input type='number' name='nightReturn' value='" + String(nightReturnHour) + "'></label>"
-                  "<label>Step Interval (min): <input type='number' name='stepInterval' value='" + String(stepInterval) + "'></label>"
-                  
-                  "<label>Motor Step Time (ms): <input type='number' name='motorStepTime' value='" + String(motorStepTime) + "'></label><br>"
+                  "<p><strong>Current Time:</strong> " +
+                  String(timeBuffer) + "</p>"
+                                       "<a href='/move?dir=east' class='btn east'>Move East</a>"
+                                       "<a href='/move?dir=west' class='btn west'>Move West</a>"
+                                       "<a href='/move?dir=stop' class='btn stop'>Stop</a>"
+                                       "<div class='settings-box'>"
+                                       "<h2>Settings</h2>"
+                                       "<form action='/settings' method='POST'>"
+                                       "<label>Auto Mode: <input type='checkbox' name='autoMode' " +
+                  (autoMode ? "checked" : "") + "></label>"
+                                                "<label>Morning Start Hour: <input type='number' name='morningStart' value='" +
+                  String(morningStartHour) + "'></label>"
+                                             "<label>Night Return Hour: <input type='number' name='nightReturn' value='" +
+                  String(nightReturnHour) + "'></label>"
+                                            "<label>Step Interval (min): <input type='number' name='stepInterval' value='" +
+                  String(stepInterval) + "'></label>"
 
-                  
-                  "<input type='submit' value='Save Settings' class='btn save'></form>"
-                  "</div>"
-                  //------------------ 
-                  "<div class='settings-box'>"
-                  "<h2>Set Time</h2>"
-                  "<form action='/settime' method='POST'>"
-                  "<label>Hour: <input type='number' name='hour' min='0' max='23'></label>"
-                  "<label>Minute: <input type='number' name='minute' min='0' max='59'></label>"
-                  "<label>Second: <input type='number' name='second' min='0' max='59'></label>"
-                  "<label>Day: <input type='number' name='day' min='1' max='31'></label>"
-                  "<label>Month: <input type='number' name='month' min='1' max='12'></label>"
-                  "<label>Year: <input type='number' name='year' min='2020' max='2099'></label>"
-                  "<input type='submit' value='Set Time' class='btn time'></form>"
-                  "</div>"
-                  "</div></body></html>";
+                                         "<label>Motor Step Time (ms): <input type='number' name='motorStepTime' value='" +
+                  String(motorStepTime) + "'></label><br>"
+
+                                          "<input type='submit' value='Save Settings' class='btn save'></form>"
+                                          "</div>"
+                                          //------------------
+                                          "<div class='settings-box'>"
+                                          "<h2>Set Time</h2>"
+                                          "<form action='/settime' method='POST'>"
+                                          "<label>Hour: <input type='number' name='hour' min='0' max='23'></label>"
+                                          "<label>Minute: <input type='number' name='minute' min='0' max='59'></label>"
+                                          "<label>Second: <input type='number' name='second' min='0' max='59'></label>"
+                                          "<label>Day: <input type='number' name='day' min='1' max='31'></label>"
+                                          "<label>Month: <input type='number' name='month' min='1' max='12'></label>"
+                                          "<label>Year: <input type='number' name='year' min='2020' max='2099'></label>"
+                                          "<input type='submit' value='Set Time' class='btn time'></form>"
+                                          "</div>"
+                                          "</div></body></html>";
     server.send(200, "text/html", html);
 }
 
-void handleMove() {
+void handleMove()
+{
     String direction = server.arg("dir");
-    if (direction == "east") moveEast();
-    else if (direction == "west") moveWest();
-    else if (direction == "stop") stopMotor();
+    if (direction == "east")
+        moveEast();
+    else if (direction == "west")
+        moveWest();
+    else if (direction == "stop")
+        stopMotor();
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "Redirecting...");
 }
 
-void handleSettings() {
+void handleSettings()
+{
     autoMode = server.arg("autoMode") == "on";
     morningStartHour = server.arg("morningStart").toInt();
     nightReturnHour = server.arg("nightReturn").toInt();
     stepInterval = server.arg("stepInterval").toInt();
 
-    if (server.hasArg("motorStepTime")) {
+    if (server.hasArg("motorStepTime"))
+    {
         motorStepTime = server.arg("motorStepTime").toInt();
         Serial.print("New Motor Step Time: ");
         Serial.println(motorStepTime);
@@ -172,11 +182,9 @@ void handleSettings() {
     server.send(302, "text/plain", "Settings updated");
 }
 
-
-
-
-void handleSetTime() {
-    RtcDateTime newTime(server.arg("year").toInt(), server.arg("month").toInt(), server.arg("day").toInt(), 
+void handleSetTime()
+{
+    RtcDateTime newTime(server.arg("year").toInt(), server.arg("month").toInt(), server.arg("day").toInt(),
                         server.arg("hour").toInt(), server.arg("minute").toInt(), server.arg("second").toInt());
     Rtc.SetDateTime(newTime);
     server.sendHeader("Location", "/", true);
@@ -184,13 +192,14 @@ void handleSetTime() {
 }
 
 // ----------------------- Setup and Loop -----------------------
-void setup() {
+void setup()
+{
     Serial.begin(115200);
 
     pinMode(RELAY_EAST, OUTPUT);
     pinMode(RELAY_WEST, OUTPUT);
-    pinMode(SENSOR_EAST, INPUT_PULLDOWN);  // NO: استخدم PULLDOWN
-    pinMode(SENSOR_WEST, INPUT_PULLDOWN);  // NO: استخدم PULLDOWN
+    pinMode(SENSOR_EAST, INPUT_PULLDOWN); // NO: استخدم PULLDOWN
+    pinMode(SENSOR_WEST, INPUT_PULLDOWN); // NO: استخدم PULLDOWN
     digitalWrite(RELAY_EAST, LOW);
     digitalWrite(RELAY_WEST, LOW);
 
@@ -203,7 +212,8 @@ void setup() {
     server.begin();
 }
 
-void loop() {
+void loop()
+{
     server.handleClient(); // معالجة الطلبات دائمًا
 
     // تحديث الوقت من RTC
@@ -212,40 +222,47 @@ void loop() {
     unsigned long currentMillis = millis();
 
     // منع تشغيل الريليهات معًا
-    if (isMovingEast && isMovingWest) {
+    if (isMovingEast && isMovingWest)
+    {
         stopMotor();
         Serial.println("⚠️ Error: Both relays active! Stopping motor.");
     }
 
     // **الوضع التلقائي**
-    if (autoMode) {
+    if (autoMode)
+    {
         // 🌞 **الصباح: التحرك شرقًا بفواصل زمنية**
         // الصباح: التحرك غربًا بفواصل زمنية
-        if (currentHour >= morningStartHour && currentHour < nightReturnHour) {
-          returningToEast = false; // إعادة ضبط حالة العودة الليلية
+        if (currentHour >= morningStartHour && currentHour < nightReturnHour)
+        {
+            returningToEast = false; // إعادة ضبط حالة العودة الليلية
 
-          if (!isMovingEast && !isMovingWest && (currentMillis - lastMoveTime >= (stepInterval * 60000))) {
-          Serial.println("🌞 Auto Mode: Moving West Step");
-          moveWest();  // تشغيل المحرك غربًا
-          delay(motorStepTime);  // الاستمرار بالحركة لمدة محددة
-          stopMotor();  // التوقف بعد الفترة المحددة
-          lastMoveTime = millis();  // تحديث وقت الحركة الأخيرة
-          }
-     }
-       
+            if (!isMovingEast && !isMovingWest && (currentMillis - lastMoveTime >= (stepInterval * 60000)))
+            {
+                Serial.println("🌞 Auto Mode: Moving West Step");
+                moveWest();              // تشغيل المحرك غربًا
+                delay(motorStepTime);    // الاستمرار بالحركة لمدة محددة
+                stopMotor();             // التوقف بعد الفترة المحددة
+                lastMoveTime = millis(); // تحديث وقت الحركة الأخيرة
+            }
+        }
 
         // 🌙 **الليل: العودة إلى الشرق حتى الوصول إلى المستشعر**
-        else if (currentHour >= nightReturnHour && !returningToEast) {
+        else if (currentHour >= nightReturnHour && !returningToEast)
+        {
             Serial.println("🌙 Auto Mode: Returning to East");
 
             // الاستمرار في التحرك شرقًا حتى يلمس الحساس الشرقي
-            if (digitalRead(SENSOR_EAST) == LOW) {
+            if (digitalRead(SENSOR_EAST) == LOW)
+            {
                 Serial.println("🌙 Moving East to return to start position...");
-                moveEast();  // تأكد أننا نتحرك شرقًا وليس غربًا
-            } else {
+                moveEast(); // تأكد أننا نتحرك شرقًا وليس غربًا
+            }
+            else
+            {
                 Serial.println("✅ Reached East Position - Stopping motor");
                 stopMotor();
-                returningToEast = true;  // تأكيد العودة وعدم تكرار العملية
+                returningToEast = true; // تأكيد العودة وعدم تكرار العملية
             }
         }
     }
